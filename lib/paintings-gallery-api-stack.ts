@@ -10,12 +10,13 @@ export class PaintingsGalleryApiStack extends cdk.Stack {
     super(scope, id, props);
 
     // DynamoDB Table for Paintings and Reviews
-    const paintingsTable = new dynamodb.Table(this, 'PaintingsTable', {
-      partitionKey: { name: 'paintingId', type: dynamodb.AttributeType.STRING },
-      sortKey: { name: 'reviewId', type: dynamodb.AttributeType.STRING },
+    const paintingsTable = new dynamodb.Table(this, "PaintingsTable", {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.DESTROY, 
+      partitionKey: { name: "paintingId", type: dynamodb.AttributeType.NUMBER },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      tableName: "Paintings",
     });
+    
 
 
 }}
