@@ -44,12 +44,13 @@ export class PaintingsGalleryApiStack extends cdk.Stack {
         REGION: "eu-west-1",
       },
       bundling: {
-        externalModules: ["aws-sdk"], 
+        externalModules: ["aws-sdk"],
       },
       timeout: cdk.Duration.seconds(10),
       memorySize: 128,
     });
 
+    // Lambda function for getting all paintings
     const getPaintingsFn = new lambdanode.NodejsFunction(this, "GetPaintingsFn", {
       runtime: lambda.Runtime.NODEJS_16_X,
       entry: path.join(__dirname, "../lambdas/getPaintings.ts"),
@@ -64,18 +65,35 @@ export class PaintingsGalleryApiStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(10),
       memorySize: 128,
     });
-    
 
-    // Grant Lambda permission to write to DynamoDB
+    // Lambda function for getting a painting by ID
+    const getPaintingByIdFn = new lambdanode.NodejsFunction(this, "GetPaintingByIdFn", {
+      runtime: lambda.Runtime.NODEJS_16_X,
+      entry: path.join(__dirname, "../lambdas/getPaintingById.ts"),
+      handler: "handler",
+      environment: {
+        TABLE_NAME: paintingsTable.tableName,
+        REGION: "eu-west-1",
+      },
+      bundling: {
+        externalModules: ["aws-sdk"],
+      },
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+    });
+
+    // Grant permission for the Lambda functions to access DynamoDB
     paintingsTable.grantReadWriteData(addPaintingFn);
-
-    // Grant Lambda permission to read from DynamoDB
     paintingsTable.grantReadData(getPaintingsFn);
+    paintingsTable.grantReadData(getPaintingByIdFn);
 
     // Define /paintings POST endpoint
     const paintings = api.root.addResource("paintings");
     paintings.addMethod("POST", new apig.LambdaIntegration(addPaintingFn));
     paintings.addMethod("GET", new apig.LambdaIntegration(getPaintingsFn));
 
+    // Define /paintings/{paintingId} GET endpoint
+    const paintingEndpoint = paintings.addResource("{paintingId}");
+    paintingEndpoint.addMethod("GET", new apig.LambdaIntegration(getPaintingByIdFn));
   }
 }
