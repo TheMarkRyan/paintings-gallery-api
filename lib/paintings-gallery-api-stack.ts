@@ -44,7 +44,7 @@ export class PaintingsGalleryApiStack extends cdk.Stack {
         REGION: "eu-west-1",
       },
       bundling: {
-        externalModules: ["aws-sdk"],
+        externalModules: ["aws-sdk"], 
       },
       timeout: cdk.Duration.seconds(10),
       memorySize: 128,
@@ -82,18 +82,60 @@ export class PaintingsGalleryApiStack extends cdk.Stack {
       memorySize: 128,
     });
 
-    // Grant permission for the Lambda functions to access DynamoDB
+    // Lambda function for getting paintings by artist
+    const getPaintingsByArtistFn = new lambdanode.NodejsFunction(this, "GetPaintingsByArtistFn", {
+      runtime: lambda.Runtime.NODEJS_16_X,
+      entry: path.join(__dirname, "../lambdas/getPaintingsByArtist.ts"),
+      handler: "handler",
+      environment: {
+        TABLE_NAME: paintingsTable.tableName,
+        REGION: "eu-west-1",
+      },
+      bundling: {
+        externalModules: ["aws-sdk"],
+      },
+      timeout: cdk.Duration.seconds(10),
+      memorySize: 128,
+    });
+
+    // Grant permissions to Lambda functions
     paintingsTable.grantReadWriteData(addPaintingFn);
     paintingsTable.grantReadData(getPaintingsFn);
     paintingsTable.grantReadData(getPaintingByIdFn);
+    paintingsTable.grantReadData(getPaintingsByArtistFn);
 
-    // Define /paintings POST endpoint
-    const paintings = api.root.addResource("paintings");
-    paintings.addMethod("POST", new apig.LambdaIntegration(addPaintingFn));
-    paintings.addMethod("GET", new apig.LambdaIntegration(getPaintingsFn));
+    // Define /paintings POST and GET endpoints
+    const paintingsResource = api.root.addResource("paintings");
+    paintingsResource.addMethod("POST", new apig.LambdaIntegration(addPaintingFn));
+    paintingsResource.addMethod("GET", new apig.LambdaIntegration(getPaintingsFn));
 
-    // Define /paintings/{paintingId} GET endpoint
-    const paintingEndpoint = paintings.addResource("{paintingId}");
-    paintingEndpoint.addMethod("GET", new apig.LambdaIntegration(getPaintingByIdFn));
+    // Define the endpoint for getting a painting by ID
+    const paintingByIdResource = paintingsResource.addResource("{paintingId}");
+    paintingByIdResource.addMethod("GET", new apig.LambdaIntegration(getPaintingByIdFn));
+
+    // Define the endpoint for getting paintings by artist
+    const paintingsByArtistResource = api.root.addResource("paintingsByArtist");
+    paintingsByArtistResource.addMethod("GET", new apig.LambdaIntegration(getPaintingsByArtistFn));
+
+    // Output for API endpoints
+    new cdk.CfnOutput(this, "AddPaintingApi", {
+      value: `${api.url}paintings`,
+      description: "API endpoint for adding a painting (POST)",
+    });
+
+    new cdk.CfnOutput(this, "GetPaintingsApi", {
+      value: `${api.url}paintings`,
+      description: "API endpoint for getting all paintings (GET)",
+    });
+
+    new cdk.CfnOutput(this, "GetPaintingByIdApi", {
+      value: `${api.url}paintings/{paintingId}`,
+      description: "API endpoint for getting a painting by ID (GET)",
+    });
+
+    new cdk.CfnOutput(this, "GetPaintingsByArtistApi", {
+      value: `${api.url}paintingsByArtist?artist=`,
+      description: "API endpoint for getting paintings by artist (GET)",
+    });
   }
 }
