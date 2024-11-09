@@ -22,9 +22,9 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
 
     const response = await ddbDocClient.send(command);
     
-    // Filter paintings by exact artist name match (case-sensitive)
+    // Filter paintings by artist name (includes case-insensitive partial matching. I added this as some artists are known by their surnames. E.g Vincent Van Gogh is colloquially known as "Van Gogh")
     const paintings = response.Items?.filter(item => 
-      item.artist?.toLowerCase() === artist.toLowerCase()
+      item.artist?.toLowerCase().includes(artist.toLowerCase())
     );
 
     return {
