@@ -1,0 +1,39 @@
+{
+  "definitions": {
+    "Painting": {
+      "type": "object",
+      "properties": {
+        "paintingId": { "type": "string" },
+        "title": { "type": "string" },
+        "artist": { "type": "string" },
+        "year": { "type": "string" },
+        "description": { "type": "string" },
+        "medium": { "type": "string" },
+        "place": { "type": "string" },
+        "period": { "type": "string" },
+        "currentStatus": { "type": "string" }
+      },
+      "required": ["paintingId", "title", "artist", "year"]
+    },
+    "Artist": {
+      "type": "object",
+      "properties": {
+        "artistId": { "type": "string" },
+        "name": { "type": "string" },
+        "birthYear": { "type": "string" },
+        "deathYear": { "type": "string" },
+        "nationality": { "type": "string" },
+        "biography": { "type": "string" }
+      },
+      "required": ["artistId", "name", "birthYear", "nationality"]
+    },
+    "PaintingArtistLink": {
+      "type": "object",
+      "properties": {
+        "paintingId": { "type": "string" },
+        "artistId": { "type": "string" }
+      },
+      "required": ["paintingId", "artistId"]
+    }
+  }
+}
