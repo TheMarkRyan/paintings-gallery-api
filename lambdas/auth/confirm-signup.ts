@@ -10,13 +10,14 @@ export const handler: APIGatewayProxyHandlerV2 = async (event) => {
   const body = event.body ? JSON.parse(event.body) : {};
 
   try {
-    const { username, code } = body;
+    const { username, confirmationCode } = body;
 
     const command = new ConfirmSignUpCommand({
       ClientId: process.env.CLIENT_ID!,
       Username: username,
-      ConfirmationCode: code,
+      ConfirmationCode: confirmationCode,
     });
+    
 
     await client.send(command);
 
