@@ -8,19 +8,27 @@ import { Construct } from "constructs";
 import * as cognito from "aws-cdk-lib/aws-cognito";
 import * as path from "path";
 import { paintings } from "../seed/paintings";
+import { artists } from "../seed/artists";
+
 
 export class PaintingsGalleryApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
-    // DynamoDB tables
+    // DynamoDB Tables
     const paintingsTable = new dynamodb.Table(this, "PaintingsTable", {
       partitionKey: { name: "paintingId", type: dynamodb.AttributeType.STRING },
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       tableName: "Paintings",
     });
 
-    // Cognito User Pool for Authentication
+    const artistsTable = new dynamodb.Table(this, "ArtistsTable", {
+      partitionKey: { name: "artistId", type: dynamodb.AttributeType.STRING },
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      tableName: "Artists",
+    });
+
+    // Cognito User Pool
     const userPool = new cognito.UserPool(this, "UserPool", {
       signInAliases: { username: true, email: true },
       selfSignUpEnabled: true,
@@ -35,19 +43,19 @@ export class PaintingsGalleryApiStack extends cdk.Stack {
     new cdk.CfnOutput(this, "UserPoolId", { value: userPool.userPoolId });
     new cdk.CfnOutput(this, "UserPoolClientId", { value: appClient.userPoolClientId });
 
-    // API Gateway configuration
+    // API Gateway
     const api = new apig.RestApi(this, "PaintingsGalleryApi", {
       restApiName: "Paintings Gallery API",
       description: "API for managing paintings and artists in a gallery.",
       deployOptions: { stageName: "dev" },
       defaultCorsPreflightOptions: {
         allowHeaders: ["Content-Type", "X-Amz-Date"],
-        allowMethods: ["OPTIONS", "GET", "POST", "DELETE"],
+        allowMethods: ["OPTIONS", "GET", "POST", "PUT", "DELETE"],
         allowOrigins: ["*"],
       },
     });
 
-    // Lambda function configuration
+    // Lambda Function Configuration
     const lambdaConfig = {
       runtime: lambda.Runtime.NODEJS_16_X,
       handler: "handler",
@@ -59,7 +67,6 @@ export class PaintingsGalleryApiStack extends cdk.Stack {
     // Authentication Endpoints
     const authResource = api.root.addResource("auth");
 
-    // Sign-up Lambda function
     const signUpFn = new lambdanode.NodejsFunction(this, "SignUpFn", {
       entry: path.join(__dirname, "../lambdas/auth/signup.ts"),
       environment: {
@@ -70,7 +77,6 @@ export class PaintingsGalleryApiStack extends cdk.Stack {
     });
     authResource.addResource("signup").addMethod("POST", new apig.LambdaIntegration(signUpFn));
 
-    // Confirm sign-up Lambda function
     const confirmSignUpFn = new lambdanode.NodejsFunction(this, "ConfirmSignUpFn", {
       entry: path.join(__dirname, "../lambdas/auth/confirm-signup.ts"),
       environment: {
@@ -81,7 +87,6 @@ export class PaintingsGalleryApiStack extends cdk.Stack {
     });
     authResource.addResource("confirm_signup").addMethod("POST", new apig.LambdaIntegration(confirmSignUpFn));
 
-    // Sign-in Lambda function
     const signInFn = new lambdanode.NodejsFunction(this, "SignInFn", {
       entry: path.join(__dirname, "../lambdas/auth/signin.ts"),
       environment: {
@@ -92,19 +97,9 @@ export class PaintingsGalleryApiStack extends cdk.Stack {
     });
     authResource.addResource("signin").addMethod("POST", new apig.LambdaIntegration(signInFn));
 
-    // Sign-out Lambda function
-    const signOutFn = new lambdanode.NodejsFunction(this, "SignOutFn", {
-      entry: path.join(__dirname, "../lambdas/auth/signout.ts"),
-      environment: {
-        REGION: "eu-west-1",
-      },
-      ...lambdaConfig,
-    });
-    authResource.addResource("signout").addMethod("POST", new apig.LambdaIntegration(signOutFn));
+    // CRUD Endpoints for Paintings
 
-    // Paintings Endpoints
-
-    // Function to get all paintings
+    // Get All Paintings
     const getPaintingsFn = new lambdanode.NodejsFunction(this, "GetPaintingsFn", {
       entry: path.join(__dirname, "../lambdas/getPaintings.ts"),
       environment: {
@@ -114,8 +109,10 @@ export class PaintingsGalleryApiStack extends cdk.Stack {
       ...lambdaConfig,
     });
     paintingsTable.grantReadData(getPaintingsFn);
+    const paintingsResource = api.root.addResource("paintings");
+    paintingsResource.addMethod("GET", new apig.LambdaIntegration(getPaintingsFn));
 
-    // Function to get a painting by ID
+    // Get Painting by ID
     const getPaintingByIdFn = new lambdanode.NodejsFunction(this, "GetPaintingByIdFn", {
       entry: path.join(__dirname, "../lambdas/getPaintingById.ts"),
       environment: {
@@ -125,16 +122,59 @@ export class PaintingsGalleryApiStack extends cdk.Stack {
       ...lambdaConfig,
     });
     paintingsTable.grantReadData(getPaintingByIdFn);
-
-    // Define /paintings route
-    const paintingsResource = api.root.addResource("paintings");
-    paintingsResource.addMethod("GET", new apig.LambdaIntegration(getPaintingsFn));
-
-    // Define /paintings/{paintingId} route
     const paintingByIdResource = paintingsResource.addResource("{paintingId}");
     paintingByIdResource.addMethod("GET", new apig.LambdaIntegration(getPaintingByIdFn));
 
-    // Seed initial data (optional)
+    // Add New Painting
+    const addPaintingFn = new lambdanode.NodejsFunction(this, "AddPaintingFn", {
+      entry: path.join(__dirname, "../lambdas/addPainting.ts"),
+      environment: {
+        TABLE_NAME: paintingsTable.tableName,
+        REGION: "eu-west-1",
+      },
+      ...lambdaConfig,
+    });
+    paintingsTable.grantWriteData(addPaintingFn);
+    paintingsResource.addMethod("POST", new apig.LambdaIntegration(addPaintingFn));
+
+    // Update Painting
+    const updatePaintingFn = new lambdanode.NodejsFunction(this, "UpdatePaintingFn", {
+      entry: path.join(__dirname, "../lambdas/updatePainting.ts"),
+      environment: {
+        TABLE_NAME: paintingsTable.tableName,
+        REGION: "eu-west-1",
+      },
+      ...lambdaConfig,
+    });
+    paintingsTable.grantWriteData(updatePaintingFn);
+    paintingByIdResource.addMethod("PUT", new apig.LambdaIntegration(updatePaintingFn));
+
+    // Delete Painting
+    const deletePaintingFn = new lambdanode.NodejsFunction(this, "DeletePaintingFn", {
+      entry: path.join(__dirname, "../lambdas/deletePainting.ts"),
+      environment: {
+        TABLE_NAME: paintingsTable.tableName,
+        REGION: "eu-west-1",
+      },
+      ...lambdaConfig,
+    });
+    paintingsTable.grantWriteData(deletePaintingFn);
+    paintingByIdResource.addMethod("DELETE", new apig.LambdaIntegration(deletePaintingFn));
+
+    // Artists Endpoints
+    const getArtistsFn = new lambdanode.NodejsFunction(this, "GetArtistsFn", {
+      entry: path.join(__dirname, "../lambdas/getArtists.ts"),
+      environment: {
+        TABLE_NAME: artistsTable.tableName,
+        REGION: "eu-west-1",
+      },
+      ...lambdaConfig,
+    });
+    artistsTable.grantReadData(getArtistsFn);
+    const artistsResource = api.root.addResource("artists");
+    artistsResource.addMethod("GET", new apig.LambdaIntegration(getArtistsFn));
+
+    // Seed Initial Data for Paintings
     new custom.AwsCustomResource(this, "LoadInitialPaintingsData", {
       onCreate: {
         service: "DynamoDB",
@@ -162,5 +202,31 @@ export class PaintingsGalleryApiStack extends cdk.Stack {
       },
       policy: custom.AwsCustomResourcePolicy.fromSdkCalls({ resources: [paintingsTable.tableArn] }),
     });
+    new custom.AwsCustomResource(this, "LoadInitialArtistsData", {
+      onCreate: {
+        service: "DynamoDB",
+        action: "batchWriteItem",
+        parameters: {
+          RequestItems: {
+            [artistsTable.tableName]: artists.map((artist) => ({
+              PutRequest: {
+                Item: {
+                  artistId: { S: artist.artistId },
+                  name: { S: artist.name },
+                  birthYear: { S: artist.birthYear },
+                  deathYear: { S: artist.deathYear },
+                  nationality: { S: artist.nationality },
+                  biography: { S: artist.biography },
+                },
+              },
+            })),
+          },
+        },
+        physicalResourceId: custom.PhysicalResourceId.of("LoadInitialArtistsData"),
+      },
+      policy: custom.AwsCustomResourcePolicy.fromSdkCalls({ resources: [artistsTable.tableArn] }),
+    });
+    
   }
+  
 }
